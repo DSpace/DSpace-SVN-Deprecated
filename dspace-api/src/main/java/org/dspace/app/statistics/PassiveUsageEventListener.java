@@ -1,9 +1,9 @@
 /*
  * PassiveUsageEvent.java
  *
- * Version: $Revision$
+ * Version: $Revision: 3734 $
  *
- * Date: $Date$
+ * Date: $Date: 2009-04-23 21:00:19 -0700 (Thu, 23 Apr 2009) $
  *
  * Copyright (c) 2002-2009, The DSpace Foundation.  All rights reserved.
  *
@@ -38,20 +38,23 @@
 
 package org.dspace.app.statistics;
 
+import org.dspace.services.model.Event;
+
 /**
  * A null implementation of AbstractUsageEvent to absorb events harmlessly and
  * cheaply.
  * 
  * @author Mark H. Wood
- * @version $Revision$
+ * @author Mark Diggory (mdiggory at atmire.com)
+ * @version $Revision: 3734 $
  */
-public class PassiveUsageEvent extends AbstractUsageEvent
+public class PassiveUsageEventListener extends AbstractUsageEventListener
 {
-    /**
+	/**
      * Do nothing and return. Effectively, the event is discarded.
      */
-    public void fire()
-    {
-        return;
-    }
+	public void receiveEvent(Event event) {
+		return;
+	}
+
 }

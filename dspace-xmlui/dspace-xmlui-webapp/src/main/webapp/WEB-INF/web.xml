@@ -70,6 +70,15 @@
         <param-value>${dspace.dir}/config/dspace.cfg</param-value>
     </context-param>
 
+  <!-- new ConfigurationService initialization for dspace.dir -->
+  <context-param>
+    <description>
+      The location of the main DSpace configuration file
+    </description>
+    <param-name>dspace.dir</param-name>
+    <param-value>${dspace.dir}</param-value>
+  </context-param>
+  
   <!--
     - Use the Cocoon debug filter together with the Cocoon demo webapp
   <filter-mapping>
