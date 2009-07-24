@@ -101,6 +101,13 @@
   <!--
     - Declare a filter for debugging incoming request
     -->
+    
+  <!-- session/request filter (from util), handles setting up requests and sessions correctly -->
+  <filter>
+    <filter-name>dspace.request</filter-name>
+    <filter-class>org.dspace.utils.servlet.DSpaceWebappServletFilter</filter-class>
+  </filter>
+  
   <filter>
     <description>Log debug information about each request</description>
     <display-name>Cocoon debug filter</display-name>
@@ -130,6 +137,15 @@
 
   <!-- Filter mappings ================================================ -->
 
+  <!-- Filter mappings -->
+  <filter-mapping>
+        <filter-name>dspace.request</filter-name>
+        <url-pattern>/*</url-pattern>
+        <dispatcher>REQUEST</dispatcher>
+        <dispatcher>FORWARD</dispatcher>
+        <dispatcher>INCLUDE</dispatcher>
+  </filter-mapping>
+  
   <!--
     - Use the Cocoon multipart filter together with the Cocoon demo webapp
     -->
@@ -158,7 +174,10 @@
 
   <!-- Servlet Context Listener ======================================= -->
   
-  
+    <!-- kernel start listener (from impl), starts up the kernel for standalong webapps -->
+  <listener>
+     <listener-class>org.dspace.servicemanager.servlet.DSpaceKernelServletContextListener</listener-class>
+  </listener>
   
     <!-- Listener to clean up Commons-FileUpload -->
     <listener>
