@@ -169,6 +169,12 @@
          <scope>provided</scope>
       </dependency>
 
+	  <dependency>
+		<groupId>org.dspace</groupId>
+		<artifactId>dspace-solr-stats</artifactId>
+		<version>1.6.0-SNAPSHOT</version>
+	  </dependency>
+	
    </dependencies>
 
 </project>
