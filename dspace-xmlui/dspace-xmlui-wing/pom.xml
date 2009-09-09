@@ -5,12 +5,13 @@
    <packaging>jar</packaging>
    <name>DSpace XML-UI (Manakin) :: Wing-Framework</name>
    <url>http://projects.dspace.org/dspace-xmlui/dspace-xmlui-wing</url>
+   <version>1.6.0-services-SNAPSHOT</version>
    <description>The Cocoon-based Wing framework</description>
 
    <parent>
       <groupId>org.dspace</groupId>
       <artifactId>dspace-xmlui</artifactId>
-      <version>1.6.0-SNAPSHOT</version>
+      <version>1.6.0-services-SNAPSHOT</version>
    </parent>
 
    <repositories>

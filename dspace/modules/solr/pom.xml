@@ -16,7 +16,7 @@
    <parent>
       <groupId>org.dspace</groupId>
       <artifactId>modules</artifactId>
-      <version>1.6.0-SNAPSHOT</version>
+      <version>1.6.0-services-SNAPSHOT</version>
    </parent>
 
    <repositories>
