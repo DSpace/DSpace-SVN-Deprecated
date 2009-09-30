@@ -3,6 +3,7 @@ package org.dspace.app.statistics;
 import org.apache.log4j.Logger;
 import org.dspace.app.statistics.UsageEvent.Action;
 import org.dspace.content.DSpaceObject;
+import org.dspace.content.Item;
 import org.dspace.core.Constants;
 import org.dspace.core.LogManager;
 import org.dspace.services.model.Event;
@@ -47,7 +48,14 @@ public class LoggerUsageEventListener extends AbstractUsageEventListener{
 		try
 		{
 			String objText = Constants.typeText[object.getType()].toLowerCase();
-			return objText + "_id=" + object.getID();
+			String handle = object.getHandle();
+			
+			/* Emulate Item logger */
+			if(handle != null && object instanceof Item)
+				return "handle=" + object.getHandle();
+			else
+				return objText + ":_id=" + object.getID();
+			
 		}catch(Exception e)
 		{
 			
