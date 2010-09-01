@@ -50,10 +50,9 @@ import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
-
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
 
 import org.apache.log4j.Category;
 import org.apache.log4j.Logger;
@@ -87,6 +86,9 @@ public class ConfigurationManager
 
     /** The configuration properties */
     private static Properties properties = null;
+    
+    /** module configuration properties */
+    private static Map<String, Properties> moduleProps = null;
 
     /** The default license */
     private static String license;
@@ -105,16 +107,30 @@ public class ConfigurationManager
     }
     
     /**
+     * Returns all properties in main configuration
      * 
+     * @return properties - all non-modular properties
      */
     public static Properties getProperties()
+    {
+        return getProperties(null);
+    }
+    /**
+     * Returns all properties for a given module
+     * 
+     * @param module
+     *        the name of the module
+     * @return properties - all module's properties
+     */
+    public static Properties getProperties(String module)
     {
         if (properties == null)
         {
             loadConfig(null);
         }
-        
-        return (Properties)properties.clone();
+        Properties retProps = 
+                (module != null) ? moduleProps.get(module) : properties;
+        return (Properties)retProps.clone();
     }
     
     /**
@@ -128,17 +144,77 @@ public class ConfigurationManager
      */
     public static String getProperty(String property)
     {
+        return getProperty(null, property);
+    }
+    
+    /**
+     * Get a module configuration property value.
+     * 
+     * @param module 
+     *      the name of the module, or <code>null</code> for regular configuration
+     *      property
+     * @param property
+     *      the name (key) of the property
+     * @return
+     *      the value of the property, or <code>null</code> if the
+     *      property does not exist
+     */
+    public static String getProperty(String module, String property)
+    {
         if (properties == null)
         {
             loadConfig(null);
         }
-        String propertyValue = properties.getProperty(property);
-        
-        if (propertyValue != null)
+        String value = null;
+        if (module == null)
         {
-            propertyValue = propertyValue.trim();
+            value = properties.getProperty(property);
         }
-        return propertyValue;
+        else
+        {
+            Properties modProps = moduleProps.get(module);
+            if (modProps != null)
+            {
+                value = modProps.getProperty(property);
+            } 
+            else
+            {
+                // try to find it in modules
+                File modFile = null;
+                try
+                {
+                    modFile = new File(getProperty("dspace.dir") +
+                                        File.separator + "config" +
+                                        File.separator + "modules" +
+                                        File.separator + module + ".cfg");
+                    if (modFile.exists())
+                    {
+                        modProps = new Properties();
+                        modProps.load(new FileInputStream(modFile));
+                        for (Enumeration pe = modProps.propertyNames(); pe.hasMoreElements(); )
+                        {
+                            String key = (String)pe.nextElement();
+                            String ival = interpolate(key, modProps.getProperty(key), 1);
+                            if (ival != null)
+                                modProps.setProperty(key, value);
+                        }
+                        moduleProps.put(module, modProps);
+                        value = modProps.getProperty(property);
+                    }
+                    else
+                    {
+                        // look in regular properties with module prepended
+                        value = properties.getProperty(module + "." + property);
+                    }
+                }
+                catch (IOException ioE)
+                {
+                    fatal("Can't load configuration: " + modFile.getAbsolutePath(), ioE);
+                }
+                
+            }
+        }
+        return (value != null) ? value.trim() : null;
     }
 
     /**
@@ -154,6 +230,24 @@ public class ConfigurationManager
     public static int getIntProperty(String property)
     {
         return getIntProperty(property, 0);
+    }
+    
+    /**
+     * Get a module configuration property as an integer
+     *
+     * @param module
+     *         the name of the module
+     * 
+     * @param property
+     *            the name of the property
+     * 
+     * @return the value of the property. <code>0</code> is returned if the
+     *         property does not exist. To differentiate between this case and
+     *         when the property actually is zero, use <code>getProperty</code>.
+     */
+    public static int getIntProperty(String module, String property)
+    {
+        return getIntProperty(module, property, 0);
     }
 
     /**
@@ -172,24 +266,46 @@ public class ConfigurationManager
      */
     public static int getIntProperty(String property, int defaultValue)
     {
-        if (properties == null)
-        {
-            loadConfig(null);
-        }
+        return getIntProperty(null, property, defaultValue);
+    }
+    
+    /**
+     * Get a module configuration property as an integer, with default
+     * 
+     * @param module
+     *         the name of the module
+     * 
+     * @param property
+     *            the name of the property
+     *            
+     * @param defaultValue
+     *            value to return if property is not found or is not an Integer.
+     *
+     * @return the value of the property. <code>default</code> is returned if
+     *         the property does not exist or is not an Integer. To differentiate between this case
+     *         and when the property actually is false, use
+     *         <code>getProperty</code>.
+     */
+    public static int getIntProperty(String module, String property, int defaultValue)
+    {
+       if (properties == null)
+       {
+           loadConfig(null);
+       }
+       
+       String stringValue = getProperty(module, property);        
+       int intValue = defaultValue;
 
-        String stringValue = properties.getProperty(property);
-        int intValue = defaultValue;
-
-        if (stringValue != null)
-        {
-            try
-            {
-                intValue = Integer.parseInt(stringValue.trim());
-            }
-            catch (NumberFormatException e)
-            {
-                warn("Warning: Number format error in property: " + property);
-            }
+       if (stringValue != null)
+       {
+           try
+           {
+               intValue = Integer.parseInt(stringValue.trim());
+           }
+           catch (NumberFormatException e)
+           {
+               warn("Warning: Number format error in property: " + property);
+           }
         }
 
         return intValue;
@@ -209,9 +325,27 @@ public class ConfigurationManager
     {
         return getLongProperty(property, 0);
     }
-
+    
     /**
+     * Get a module configuration property as a long
+     *
+     * @param module
+     *         the name of the module    
+     * @param property
+     *            the name of the property
+     *
+     * @return the value of the property. <code>0</code> is returned if the
+     *         property does not exist. To differentiate between this case and
+     *         when the property actually is zero, use <code>getProperty</code>.
+     */
+    public static long getLongProperty(String module, String property)
+    {
+        return getLongProperty(module, property, 0);
+    }
+     
+   /**
      * Get a configuration property as an long, with default
+     * 
      *
      * @param property
      *            the name of the property
@@ -226,12 +360,33 @@ public class ConfigurationManager
      */
     public static long getLongProperty(String property, int defaultValue)
     {
+        return getLongProperty(null, property, defaultValue);
+    }
+
+    /**
+     * Get a configuration property as an long, with default
+     * 
+     * @param the module, or <code>null</code> for regular property
+     *
+     * @param property
+     *            the name of the property
+     *
+     * @param defaultValue
+     *            value to return if property is not found or is not a Long.
+     *
+     * @return the value of the property. <code>default</code> is returned if
+     *         the property does not exist or is not an Integer. To differentiate between this case
+     *         and when the property actually is false, use
+     *         <code>getProperty</code>.
+     */
+    public static long getLongProperty(String module, String property, int defaultValue)
+    {
         if (properties == null)
         {
             loadConfig(null);
         }
 
-        String stringValue = properties.getProperty(property);
+        String stringValue = properties.getProperty(module, property);
         long longValue = defaultValue;
 
         if (stringValue != null)
@@ -253,9 +408,9 @@ public class ConfigurationManager
      * Get the License
      * 
      * @param
-     *         licenseFile file name
-     * 
-     * @return
+     *         license file name
+     *  
+     *  @return
      *         license text
      * 
      */
@@ -296,7 +451,6 @@ public class ConfigurationManager
         return license;
     }
      
-
     /**
      * Get a configuration property as a boolean. True is indicated if the value
      * of the property is <code>TRUE</code> or <code>YES</code> (case
@@ -314,8 +468,28 @@ public class ConfigurationManager
     {
         return getBooleanProperty(property, false);
     }
-
+    
     /**
+     * Get a module configuration property as a boolean. True is indicated if 
+     * the value of the property is <code>TRUE</code> or <code>YES</code> (case
+     * insensitive.)
+     * 
+     * @param the module, or <code>null</code> for regular property   
+     * 
+     * @param property
+     *            the name of the property
+     * 
+     * @return the value of the property. <code>false</code> is returned if
+     *         the property does not exist. To differentiate between this case
+     *         and when the property actually is false, use
+     *         <code>getProperty</code>.
+     */
+    public static boolean getBooleanProperty(String module, String property)
+    {
+        return getBooleanProperty(module, property, false);
+    }
+    
+   /**
      * Get a configuration property as a boolean, with default.
      * True is indicated if the value
      * of the property is <code>TRUE</code> or <code>YES</code> (case
@@ -334,12 +508,36 @@ public class ConfigurationManager
      */
     public static boolean getBooleanProperty(String property, boolean defaultValue)
     {
+        return getBooleanProperty(null, property, defaultValue);
+    }
+
+    /**
+     * Get a module configuration property as a boolean, with default.
+     * True is indicated if the value
+     * of the property is <code>TRUE</code> or <code>YES</code> (case
+     * insensitive.)
+     * 
+     * @param the module, or <code>null</code> for regular property   
+     *
+     * @param property
+     *            the name of the property
+     *
+     * @param defaultValue
+     *            value to return if property is not found.
+     *
+     * @return the value of the property. <code>default</code> is returned if
+     *         the property does not exist. To differentiate between this case
+     *         and when the property actually is false, use
+     *         <code>getProperty</code>.
+     */
+    public static boolean getBooleanProperty(String module, String property, boolean defaultValue)
+    {
         if (properties == null)
         {
             loadConfig(null);
         }
 
-        String stringValue = properties.getProperty(property);
+        String stringValue = getProperty(module, property);
 
         if (stringValue != null)
         {
@@ -360,10 +558,32 @@ public class ConfigurationManager
      */
     public static Enumeration propertyNames()
     {
+        return propertyNames(null);
+    }
+    
+    /**
+     * Returns an enumeration of all the keys in a module configuration
+     * 
+     * @param the module, or <code>null</code> for regular property  
+     * 
+     * @return an enumeration of all the keys in the module configuration,
+     *         or <code>null</code> if the module does not exist.
+     */
+    public static Enumeration propertyNames(String module)
+    {
         if (properties == null)
+        {
             loadConfig(null);
-
-        return properties.propertyNames();
+        }
+        if (module == null)
+        {
+            return properties.propertyNames();
+        }
+        if (moduleProps.containsKey(module))
+        {
+            return moduleProps.get(module).propertyNames();
+        }
+        return null;
     }
 
     /**
@@ -654,6 +874,7 @@ public class ConfigurationManager
             else
             {
                 properties = new Properties();
+                moduleProps = new HashMap<String, Properties>();
                 is = url.openStream();
                 properties.load(is);
 
@@ -661,7 +882,7 @@ public class ConfigurationManager
                 for (Enumeration pe = properties.propertyNames(); pe.hasMoreElements(); )
                 {
                     String key = (String)pe.nextElement();
-                    String value = interpolate(key, 1);
+                    String value = interpolate(key, properties.getProperty(key), 1);
                     if (value != null)
                         properties.setProperty(key, value);
                 }
@@ -798,11 +1019,11 @@ public class ConfigurationManager
      * @return new value if it contains interpolations, or null
      *   if it had no variable references.
      */
-    private static String interpolate(String key, int level)
+    private static String interpolate(String key, String value, int level)
     {
         if (level > RECURSION_LIMIT)
             throw new IllegalArgumentException("ConfigurationManager: Too many levels of recursion in configuration property variable interpolation, property="+key);
-        String value = (String)properties.get(key);
+        //String value = (String)properties.get(key);
         int from = 0;
         StringBuffer result = null;
         while (from < value.length())
@@ -820,7 +1041,7 @@ public class ConfigurationManager
                     result.append(value.substring(from, start));
                 if (properties.containsKey(var))
                 {
-                    String ivalue = interpolate(var, level+1);
+                    String ivalue = interpolate(var, properties.getProperty(var), level+1);
                     if (ivalue != null)
                     {
                         result.append(ivalue);
@@ -873,10 +1094,26 @@ public class ConfigurationManager
 
             System.exit(0);
         }
+        else if ((argv.length == 4) && argv[0].equals("-module") &&
+                                        argv[2].equals("-property")) 
+        {
+            String val = getProperty(argv[1], argv[3]);
+
+            if (val != null)
+            {
+                System.out.println(val);
+            }
+            else
+            {
+                System.out.println("");
+            }
+
+            System.exit(0);
+        }
         else
         {
             System.err
-                    .println("Usage: ConfigurationManager OPTION\n  -property prop.name  get value of prop.name from dspace.cfg");
+                    .println("Usage: ConfigurationManager OPTION\n  [-module mod.name] -property prop.name  get value of prop.name from module or dspace.cfg");
         }
 
         System.exit(1);
