@@ -62,7 +62,6 @@ import org.dspace.content.MetadataSchema;
 import org.dspace.core.ConfigurationManager;
 import org.dspace.core.Constants;
 import org.dspace.core.Context;
-import org.dspace.core.Utils;
 import org.dspace.core.PluginManager;
 import org.dspace.handle.HandleManager;
 
@@ -123,6 +122,14 @@ public class EmbargoManager
         throws SQLException, AuthorizeException, IOException
     {
         init();
+        // if lift is null, we might be restoring an item from an AIP
+        if (lift == null)
+        {
+             if ((lift = recoverEmbargoDate(item)) == null)
+             {
+                 return;
+             }
+        }
         String slift = lift.toString();
         boolean ignoreAuth = context.ignoreAuthorization();
         try
@@ -410,5 +417,22 @@ public class EmbargoManager
     {
         String sa[] = field.split("\\.", 3);
         return sa.length > 2 ? sa[2] : null;
+    }
+    
+    // return the lift date assigned when enmbargo was set, or null if either:
+    // it was never under embargo, or the lift date has passed.
+    private static DCDate recoverEmbargoDate(Item item) {
+        DCDate liftDate = null;
+        DCValue lift[] = item.getMetadata(lift_schema, lift_element, lift_qualifier, Item.ANY);
+        if (lift.length > 0)
+        {
+            liftDate = new DCDate(lift[0].value);
+            // sanity check: do not allow an embargo lift date in the past.
+            if (liftDate.toDate().before(new Date()))
+            {
+                liftDate = null;
+            }
+        }
+        return liftDate;       
     }
 }
