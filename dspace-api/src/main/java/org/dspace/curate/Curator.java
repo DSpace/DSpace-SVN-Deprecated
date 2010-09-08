@@ -25,6 +25,7 @@ import org.dspace.core.Constants;
 import org.dspace.core.Context;
 import org.dspace.core.PluginManager;
 import org.dspace.handle.HandleManager;
+import org.dspace.workflow.WorkflowItem;
 
 /**
  * Curator orchestrates and manages the application of a one or more curation
@@ -45,6 +46,7 @@ public class Curator {
     private static Logger log = Logger.getLogger(Curator.class);
     private Map<String, TaskContext> ctxMap = new HashMap<String, TaskContext>();
     private List<String> perfList = new ArrayList<String>();
+    private TaskQueue taskQ = null;
     private String reporter = null;
 
     public Curator() {
@@ -82,7 +84,16 @@ public class Curator {
            return;            
         }
         try {
-            DSpaceObject dso = HandleManager.resolveToObject(c, id);
+            DSpaceObject dso = null;
+            if (id.indexOf("/") > 0) {
+                dso = HandleManager.resolveToObject(c, id);
+            } else {
+                // could be a workflow item id
+                WorkflowItem wfi = WorkflowItem.find(c, Integer.parseInt(id));
+                if (wfi != null) {
+                    dso = wfi.getItem();
+                }
+            }
             if (dso != null) {
                 curate(dso);
             } else {
@@ -118,7 +129,9 @@ public class Curator {
     }
     
     public void queue(Context c, String id, String queueId) throws Exception {
-        TaskQueue taskQ = (TaskQueue)PluginManager.getSinglePlugin(TaskQueue.class);
+        if (taskQ == null) {
+            taskQ = (TaskQueue)PluginManager.getSinglePlugin(TaskQueue.class);
+        }
         taskQ.enqueue(queueId, new TaskQueueEntry(c.getCurrentUser().getName(),
                                     System.currentTimeMillis(), perfList, id));
     }

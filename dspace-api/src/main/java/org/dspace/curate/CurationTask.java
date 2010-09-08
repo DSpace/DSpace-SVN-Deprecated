@@ -29,7 +29,7 @@ public interface CurationTask {
      * @param curator the Curator controlling this task
      * @param taskId identifier task should use in invoking services
      */
-    public void init(Curator curator, String taskId);
+    void init(Curator curator, String taskId);
 
     /**
      * Perform the curation task upon passed DSO
@@ -37,7 +37,7 @@ public interface CurationTask {
      * @param dso the DSpace object
      * @throws IOException
      */
-    public void perform(DSpaceObject dso) throws IOException;
+    void perform(DSpaceObject dso) throws IOException;
 
     /**
      * Perform the curation task for passed id
@@ -46,5 +46,5 @@ public interface CurationTask {
      * @param id persistent ID for DSpace object
      * @throws Exception
      */
-    public void perform(Context ctx, String id) throws IOException;
+    void perform(Context ctx, String id) throws IOException;
 }

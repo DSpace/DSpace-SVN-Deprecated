@@ -9,8 +9,13 @@
 package org.dspace.curate;
 
 import java.io.IOException;
+import java.sql.SQLException;
 
+import org.dspace.content.Collection;
+import org.dspace.content.Community;
 import org.dspace.content.DSpaceObject;
+import org.dspace.content.Item;
+import org.dspace.content.ItemIterator;
 import org.dspace.core.Context;
 
 /**
@@ -32,6 +37,41 @@ public abstract class AbstractCurationTask implements CurationTask {
 
     @Override
     public abstract void perform(DSpaceObject dso) throws IOException;
+    
+    /**
+     * Distributes a task through a DSpace container - a convenience method
+     * for tasks declaring the <code>@Distributive</code> property. Users must
+     * override the'performItem' invoked by this method.
+     * 
+     * @param dso
+     * @throws IOException
+     */
+    protected void distribute(DSpaceObject dso) throws IOException {
+        try {
+            if (dso instanceof Item) {
+                performItem((Item)dso);
+            } else if (dso instanceof Collection) {
+                ItemIterator iter = ((Collection)dso).getItems();
+                while (iter.hasNext()) {
+                    performItem(iter.next());
+                }
+            } else if (dso instanceof Community) {
+                Community comm = (Community)dso;
+                for (Community subcomm : comm.getSubcommunities()) {
+                    distribute(subcomm);
+                }
+                for (Collection coll : comm.getCollections()) {
+                    distribute(coll);
+                }
+            }
+        } catch (SQLException sqlE) {
+            throw new IOException(sqlE.getMessage());
+        }       
+    }
+    
+    protected void performItem(Item item) throws SQLException, IOException {
+        // no-op - override when using 'distribute' method
+    }
 
     @Override
     public void perform(Context ctx, String id) throws IOException {
