@@ -63,6 +63,7 @@ import org.dspace.core.Context;
 import org.dspace.core.Email;
 import org.dspace.core.I18nUtil;
 import org.dspace.core.LogManager;
+import org.dspace.curate.WorkflowCurator;
 import org.dspace.eperson.EPerson;
 import org.dspace.eperson.Group;
 import org.dspace.handle.HandleManager;
@@ -195,8 +196,9 @@ public class WorkflowManager
         // remove the WorkspaceItem
         wsi.deleteWrapper();
 
-        // now get the worflow started
-        doState(c, wfi, WFSTATE_STEP1POOL, null);
+        // launch into workflow
+        wfi.setState(WFSTATE_SUBMIT);
+        advance(c, wfi, null); 
 
         // Return the workflow item
         return wfi;
@@ -331,6 +333,12 @@ public class WorkflowManager
                 + "newowner_id=" + wi.getOwner().getID() + "old_state="
                 + taskstate + "new_state=" + wi.getState()));
     }
+    
+    public static void advance(Context c, WorkflowItem wi, EPerson e)
+            throws SQLException, IOException, AuthorizeException
+    {
+        advance(c, wi, e, true, true);
+    }
 
     /**
      * approveAction() sends an item forward in the workflow (reviewers,
@@ -346,18 +354,40 @@ public class WorkflowManager
      * @param e
      *            EPerson doing the approval
      */
-    public static void advance(Context c, WorkflowItem wi, EPerson e)
+    public static boolean advance(Context c, WorkflowItem wi, EPerson e,
+                                  boolean curate, boolean record)
             throws SQLException, IOException, AuthorizeException
     {
         int taskstate = wi.getState();
+        boolean archived = false;
+        
+        // perform curation tasks if needed
+        if (curate && WorkflowCurator.needsCuration(wi))
+        {
+            if (! WorkflowCurator.doCuration(c, wi)) {
+                // don't proceed - either curation tasks queued, or item rejected
+                log.info(LogManager.getHeader(c, "advance_workflow",
+                        "workflow_item_id=" + wi.getID() + ",item_id="
+                        + wi.getItem().getID() + ",collection_id="
+                        + wi.getCollection().getID() + ",old_state="
+                        + taskstate + ",doCuration=false"));
+                return archived;
+            }
+        }
 
         switch (taskstate)
         {
+        case WFSTATE_SUBMIT:
+            doState(c, wi, WFSTATE_STEP1POOL, e);
+            
+            break;
         case WFSTATE_STEP1:
 
             // authorize DSpaceActions.SUBMIT_REVIEW
             // Record provenance
-            recordApproval(c, wi, e);
+            if (record) {
+                recordApproval(c, wi, e);
+            }
             doState(c, wi, WFSTATE_STEP2POOL, e);
 
             break;
@@ -366,7 +396,9 @@ public class WorkflowManager
 
             // authorize DSpaceActions.SUBMIT_STEP2
             // Record provenance
-            recordApproval(c, wi, e);
+            if (record) {
+                recordApproval(c, wi, e);
+            }
             doState(c, wi, WFSTATE_STEP3POOL, e);
 
             break;
@@ -376,7 +408,7 @@ public class WorkflowManager
             // authorize DSpaceActions.SUBMIT_STEP3
             // We don't record approval for editors, since they can't reject,
             // and thus didn't actually make a decision
-            doState(c, wi, WFSTATE_ARCHIVE, e);
+            archived = doState(c, wi, WFSTATE_ARCHIVE, e);
 
             break;
 
@@ -388,6 +420,7 @@ public class WorkflowManager
                         + wi.getItem().getID() + ",collection_id="
                         + wi.getCollection().getID() + ",old_state="
                         + taskstate + ",new_state=" + wi.getState()));
+        return archived;
     }
 
     /**
@@ -511,7 +544,9 @@ public class WorkflowManager
             else
             {
                 // no reviewers, skip ahead
-                archived = doState(c, wi, WFSTATE_STEP2POOL, null);
+                //archived = doState(c, wi, WFSTATE_STEP2POOL, null);
+                wi.setState(WFSTATE_STEP1);
+                archived = advance(c, wi, null, true, false);
             }
 
             break;
@@ -551,7 +586,9 @@ public class WorkflowManager
             else
             {
                 // no reviewers, skip ahead
-                archived = doState(c, wi, WFSTATE_STEP3POOL, null);
+                //archived = doState(c, wi, WFSTATE_STEP3POOL, null);
+                wi.setState(WFSTATE_STEP2);
+                archived = advance(c, wi, null, true, false);
             }
 
             break;
@@ -587,7 +624,9 @@ public class WorkflowManager
             else
             {
                 // no editors, skip ahead
-                archived = doState(c, wi, WFSTATE_ARCHIVE, newowner);
+                //archived = doState(c, wi, WFSTATE_ARCHIVE, newowner);
+                wi.setState(WFSTATE_STEP3);
+                archived = advance(c, wi, null, true, false);
             }
 
             break;
@@ -834,6 +873,43 @@ public class WorkflowManager
        
         DatabaseManager.updateQuery(c, myrequest, wi.getID());
     }
+    
+    public static void notifyOfCuration(Context c, WorkflowItem wi, EPerson[] epa,
+           String taskName, String action, String message) throws SQLException, IOException {
+        
+        try
+        {
+            // Get the item title
+            String title = getItemTitle(wi);
+
+            // Get the submitter's name
+            String submitter = getSubmitterName(wi);
+
+            // Get the collection
+            Collection coll = wi.getCollection();
+
+            for (int i = 0; i < epa.length; i++)
+            {
+                Locale supportedLocale = I18nUtil.getEPersonLocale(epa[i]);
+                Email email = ConfigurationManager.getEmail(I18nUtil.getEmailFilename(supportedLocale,
+                                                                                  "flowtask_notify"));
+                email.addArgument(title);
+                email.addArgument(coll.getMetadata("name"));
+                email.addArgument(submitter);
+                email.addArgument(taskName);
+                email.addArgument(message);
+                email.addArgument(action);
+                email.addRecipient(epa[i].getEmail());
+                email.send();
+            }
+        }
+        catch (MessagingException e)
+        {
+            log.warn(LogManager.getHeader(c, "notifyOfCuration", "cannot email users" + 
+                                          " of workflow_item_id" + wi.getID()));
+        }
+    }
+    
 
     private static void notifyGroupOfTask(Context c, WorkflowItem wi,
             Group mygroup, EPerson[] epa) throws SQLException, IOException
@@ -897,8 +973,9 @@ public class WorkflowManager
             }
             catch (MessagingException e)
             {
+                String gid = (mygroup != null) ? String.valueOf(mygroup.getID()) : "none";
                 log.warn(LogManager.getHeader(c, "notifyGroupofTask",
-                        "cannot email user" + " group_id" + mygroup.getID()
+                        "cannot email user" + " group_id" + gid
                                 + " workflow_item_id" + wi.getID()));
             }
         }
