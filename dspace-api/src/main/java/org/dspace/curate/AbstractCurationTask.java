@@ -17,6 +17,7 @@ import org.dspace.content.DSpaceObject;
 import org.dspace.content.Item;
 import org.dspace.content.ItemIterator;
 import org.dspace.core.Context;
+import org.dspace.handle.HandleManager;
 
 /**
  * AbstractCurationTask encapsulates a few common patterns of task use,
@@ -36,7 +37,7 @@ public abstract class AbstractCurationTask implements CurationTask {
     }
 
     @Override
-    public abstract void perform(DSpaceObject dso) throws IOException;
+    public abstract int perform(DSpaceObject dso) throws IOException;
     
     /**
      * Distributes a task through a DSpace container - a convenience method
@@ -74,16 +75,21 @@ public abstract class AbstractCurationTask implements CurationTask {
     }
 
     @Override
-    public void perform(Context ctx, String id) throws IOException {
-        Curator.dereference(ctx, id, this);
+    public int perform(Context ctx, String id) throws IOException {
+        DSpaceObject dso = dereference(ctx, id);
+        return (dso != null) ? perform(dso) : Curator.CURATE_FAIL;
+    }
+    
+    protected DSpaceObject dereference(Context ctx, String id) throws IOException {
+        try {
+            return HandleManager.resolveToObject(ctx, id);
+        } catch (SQLException sqlE) {
+            throw new IOException(sqlE.getMessage());
+        }
     }
 
     protected void report(String message) {
         curator.report(message);
-    }
-
-    protected void setStatus(int code) {
-        curator.setStatus(taskId, code);
     }
 
     protected void setResult(String result) {

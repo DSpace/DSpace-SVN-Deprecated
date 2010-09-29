@@ -25,7 +25,6 @@ import org.dspace.core.Constants;
 import org.dspace.core.Context;
 import org.dspace.core.PluginManager;
 import org.dspace.handle.HandleManager;
-import org.dspace.workflow.WorkflowItem;
 
 /**
  * Curator orchestrates and manages the application of a one or more curation
@@ -37,17 +36,29 @@ import org.dspace.workflow.WorkflowItem;
 public class Curator {
 
     // status code values
-    public static final int CURATE_NOTASK = -2;
-    public static final int CURATE_UNSET = -1;
+    /** Curator unable to find requested task */
+    public static final int CURATE_NOTASK = -3;
+    /** no assigned status code - typically because task not yet performed */
+    public static final int CURATE_UNSET = -2;
+    /** task encountered a error in processing */
+    public static final int CURATE_ERROR = -1;
+    /** task completed successfully */
     public static final int CURATE_SUCCESS = 0;
+    /** task failed */
     public static final int CURATE_FAIL = 1;
+    /** task was not applicable to passed object */
     public static final int CURATE_SKIP = 2;
+    
+    // invocation modes - used by Suspendable tasks
+    public static enum Invoked { INTERACTIVE, BATCH, ANY };
 
     private static Logger log = Logger.getLogger(Curator.class);
-    private Map<String, TaskContext> ctxMap = new HashMap<String, TaskContext>();
+    
+    private Map<String, TaskRunner> trMap = new HashMap<String, TaskRunner>();
     private List<String> perfList = new ArrayList<String>();
     private TaskQueue taskQ = null;
     private String reporter = null;
+    private Invoked iMode = null;
 
     public Curator() {
         ;
@@ -64,7 +75,7 @@ public class Curator {
         CurationTask task = (CurationTask)PluginManager.getNamedPlugin(CurationTask.class, taskName);
         if (task != null) {
             task.init(this, taskName);
-            ctxMap.put(taskName, new TaskContext(task, taskName));
+            trMap.put(taskName, new TaskRunner(task, taskName));
             // performance order currently FIFO - to be revisited
             perfList.add(taskName);
         } else {
@@ -72,34 +83,64 @@ public class Curator {
         }
         return this;
     }
+    
+    
+    /**
+     * Removes a task from the set to be performed.
+     * 
+     * @param taskName - logical name of the task
+     * @return this curator - to support concatenating invocation style
+     */
+    public Curator removeTask(String taskName) {
+        trMap.remove(taskName);
+        perfList.remove(taskName);
+        return this;
+    }
+    
+    /**
+     * Assigns invocation mode.
+     * 
+     * @param mode one of INTERACTIVE, BATCH, ANY
+     * @return
+     */
+    public Curator setInvoked(Invoked mode) {
+        iMode = mode;
+        return this;
+    }
 
+    /**
+     * Sets the reporting stream for this curator.
+     * 
+     * @param reporter name of reporting stream. The name '-'
+     *                 causes reporting to standard out. 
+     * @return the Curator instance
+     */
     public Curator setReporter(String reporter) {
         this.reporter = reporter;
         return this;
     }
 
-    public void curate(Context c, String id) throws Exception {
+    /**
+     * Performs all configured tasks upon object identified by id. If
+     * the object can be resolved as a handle, the DSO will be the
+     * target object.
+     * 
+     * @param c a Dpace context
+     * @param id an object identifier
+     * @throws IOException
+     */
+    public void curate(Context c, String id) throws IOException {
         if (id == null) {
            log.error("curate - null id");
            return;            
         }
         try {
-            DSpaceObject dso = null;
-            if (id.indexOf("/") > 0) {
-                dso = HandleManager.resolveToObject(c, id);
-            } else {
-                // could be a workflow item id
-                WorkflowItem wfi = WorkflowItem.find(c, Integer.parseInt(id));
-                if (wfi != null) {
-                    dso = wfi.getItem();
-                }
-            }
+            DSpaceObject dso = HandleManager.resolveToObject(c, id);
             if (dso != null) {
                 curate(dso);
             } else {
                 for (String taskName : perfList) {
-                    TaskContext ctx = ctxMap.get(taskName);
-                    ctx.task.perform(c, id);
+                    trMap.get(taskName).run(dso);
                 }
             }
         } catch (SQLException sqlE) {
@@ -107,28 +148,42 @@ public class Curator {
         }
     }
 
-    public void curate(DSpaceObject dso) throws Exception {
+    /**
+     * Performs all configured tasks upon DSpace object.
+     * @param dso the DSpace object
+     * @throws IOException
+     */
+    public void curate(DSpaceObject dso) throws IOException {
         if (dso == null) {
             log.error("curate - null dso");
             return;
         }
         int type = dso.getType();
         for (String taskName : perfList) {
-            TaskContext ctx = ctxMap.get(taskName);
-            CurationTask task = ctx.task;
+            TaskRunner tr = trMap.get(taskName);
             // do we need to iterate over the object ?
             if (type == Constants.ITEM ||
-                task.getClass().isAnnotationPresent(Distributive.class)) {
-                task.perform(dso);
+                tr.task.getClass().isAnnotationPresent(Distributive.class)) {
+                tr.run(dso);
             } else if (type == Constants.COLLECTION) {
-                doCollection(task, (Collection)dso);
+                doCollection(tr, (Collection)dso);
             } else if (type == Constants.COMMUNITY) {
-                doCommunity(task, (Community)dso);
+                doCommunity(tr, (Community)dso);
             }
         }
     }
     
-    public void queue(Context c, String id, String queueId) throws Exception {
+    /**
+     * Places a curation request for the object identified by id on a
+     * managed queue named by the queueId.
+     * 
+     * @param c A DSpace context
+     * @param id an object Id
+     * @param queueId name of a queue. If queue does not exist, it will
+     *                be created automatically.
+     * @throws IOException
+     */
+    public void queue(Context c, String id, String queueId) throws IOException {
         if (taskQ == null) {
             taskQ = (TaskQueue)PluginManager.getSinglePlugin(TaskQueue.class);
         }
@@ -136,11 +191,19 @@ public class Curator {
                                     System.currentTimeMillis(), perfList, id));
     }
     
+    /**
+     * Removes all configured tasks from the Curator.
+     */
     public void clear() {
-        ctxMap.clear();
+        trMap.clear();
         perfList.clear();
     }
 
+    /**
+     * Adds a message to the configured reporting stream.
+     * 
+     * @param message the message to output to the reporting stream.
+     */
     public void report(String message) {
         // Stub for now
         if ("-".equals(reporter)) {
@@ -148,95 +211,140 @@ public class Curator {
         }
     }
 
+    /**
+     * Returns the status code for the latest performance of the named task.
+     * 
+     * @param taskName the task name
+     * @return the status code - one of CURATE_ values
+     */
     public int getStatus(String taskName) {
-        TaskContext ctx = ctxMap.get(taskName);
-        return (ctx != null) ? ctx.statusCode : CURATE_NOTASK;
+        TaskRunner tr = trMap.get(taskName);
+        return (tr != null) ? tr.statusCode : CURATE_NOTASK;
     }
 
-    public void setStatus(String taskName, int code) {
-        TaskContext ctx = ctxMap.get(taskName);
-        if (ctx != null) {
-            ctx.setStatus(code);
-        }
-    }
-
+    /**
+     * Returns the result string for the latest performance of the named task.
+     * 
+     * @param taskName the task name
+     * @return the result string, or <code>null</code> if task has not set it.
+     */
     public String getResult(String taskName) {
-        TaskContext ctx = ctxMap.get(taskName);
-        return (ctx != null) ? ctx.result : null;
+        TaskRunner tr = trMap.get(taskName);
+        return (tr != null) ? tr.result : null;
     }
 
+    /**
+     * Assigns a result to the performance of the named task.
+     * 
+     * @param taskName the task name
+     * @param result a string indicating results of performing task.
+     */
     public void setResult(String taskName, String result) {
-        TaskContext ctx = ctxMap.get(taskName);
-        if (ctx != null) {
-            ctx.setResult(result);
+        TaskRunner tr = trMap.get(taskName);
+        if (tr != null) {
+            tr.setResult(result);
         }
     }
 
-    public static DSpaceObject dereference(Context ctx, String id, CurationTask task) throws IOException {
-        try {
-            DSpaceObject dso = HandleManager.resolveToObject(ctx, id);
-            if (task != null) {
-                if (dso != null) {
-                    task.perform(dso);
-                } else {
-                    log.error("Id: '" + id + "' not resolvable");
-                }
-            }
-            return dso;
-        } catch (SQLException sqlE) {
-            throw new IOException(sqlE.getMessage());
-        }
-    }
-
+    /**
+     * Returns whether a given DSO is a 'container' - collection or community
+     * @param dso a DSpace object
+     * @return true if a container, false otherwise
+     */
     public static boolean isContainer(DSpaceObject dso) {
         return (dso.getType() == Constants.COMMUNITY ||
                 dso.getType() == Constants.COLLECTION);
     }
 
-    static void doCommunity(CurationTask task, Community comm) throws IOException {
+    private boolean doCommunity(TaskRunner tr, Community comm) throws IOException {
         try {
-            task.perform(comm);
+            if (! tr.run(comm)) {
+                return false;
+            }
             for (Community subcomm : comm.getSubcommunities()) {
-                doCommunity(task, subcomm);
+                if (! doCommunity(tr, subcomm)) {
+                    return false;
+                }
             }
             for (Collection coll : comm.getCollections()) {
-                doCollection(task, coll);
+                if (! doCollection(tr, coll)) {
+                    return false;
+                }
             }
         } catch (SQLException sqlE) {
             throw new IOException(sqlE.getMessage());
         }
+        return true;
     }
 
-    static void doCollection(CurationTask task, Collection coll) throws IOException {
+    private boolean doCollection(TaskRunner tr, Collection coll) throws IOException {
         try {
-            task.perform(coll);
+            if (! tr.run(coll)) {
+                return false;
+            }
             ItemIterator iter = coll.getItems();
             while (iter.hasNext()) {
-                task.perform(iter.next());
+                if (! tr.run(iter.next())) {
+                    return false;
+                }
             }
         } catch (SQLException sqlE) {
             throw new IOException(sqlE.getMessage());
         }
+        return true;
     }
 
-    private class TaskContext {
-        CurationTask task;
-        String taskName;
-        int statusCode;
-        String result;
+    private class TaskRunner {
+        CurationTask task = null;
+        String taskName = null;
+        int statusCode = CURATE_UNSET;
+        String result = null;
+        Invoked mode = null;
+        int[] codes = null;
 
-        public TaskContext(CurationTask task, String name) {
+        public TaskRunner(CurationTask task, String name) {
             this.task = task;
             taskName = name;
-            statusCode = CURATE_UNSET;
+            parseAnnotations(task.getClass());
         }
-
-        public void setStatus(int code) {
-            statusCode = code;
+        
+        public boolean run(DSpaceObject dso) throws IOException {
+            if (dso == null) {
+                throw new IOException("DSpaceObject is null");
+            }
+            statusCode = task.perform(dso);
+            return ! suspend(statusCode);
+        }
+        
+        public boolean run(Context c, String id) throws IOException {
+            if (c == null || id == null) {
+                throw new IOException("Context or identifier is null");
+            }
+            statusCode = task.perform(c, id);
+            return ! suspend(statusCode);
         }
 
         public void setResult(String result) {
             this.result = result;
+        }
+        
+        private void parseAnnotations(Class tClass) {
+            Suspendable suspendAnn = (Suspendable)tClass.getAnnotation(Suspendable.class);
+            if (suspendAnn != null) {
+                mode = suspendAnn.invoked();
+                codes = suspendAnn.statusCodes();
+            }
+        }
+        
+        private boolean suspend(int code) {
+            if (mode != null && (mode.equals(Invoked.ANY) || mode.equals(iMode))) {
+                for (int i : codes) {
+                    if (code == i) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 }

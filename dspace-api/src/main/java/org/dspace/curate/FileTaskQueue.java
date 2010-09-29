@@ -34,7 +34,7 @@ public class FileTaskQueue implements TaskQueue {
 
     private static Logger log = Logger.getLogger(TaskQueue.class);   
     // base directory for curation task queues
-    private String tqDir = ConfigurationManager.getProperty("taskqueues.dir");
+    private String tqDir = ConfigurationManager.getProperty("curate", "taskqueue.dir");
 
     // ticket for queue readers
     private long readTicket = -1L;

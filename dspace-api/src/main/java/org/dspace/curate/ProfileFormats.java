@@ -38,11 +38,11 @@ public class ProfileFormats extends AbstractCurationTask {
      * @throws IOException
      */
     @Override
-    public void perform(DSpaceObject dso) throws IOException {
+    public int perform(DSpaceObject dso) throws IOException {
         fmtTable.clear();
         distribute(dso);
         formatResults();
-        setStatus(Curator.CURATE_SUCCESS);
+        return Curator.CURATE_SUCCESS;
     }
     
     @Override

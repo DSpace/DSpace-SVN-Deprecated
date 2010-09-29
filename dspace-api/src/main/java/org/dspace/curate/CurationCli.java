@@ -129,6 +129,8 @@ public class CurationCli {
         if (reporterName != null) {
             curator.setReporter(reporterName);
         }
+        // we are operating in batch mode, if anyone cares.
+        curator.setInvoked(Curator.Invoked.BATCH);
         // load curation tasks
         if (taskName != null) {
             if (verbose) {
@@ -177,11 +179,21 @@ public class CurationCli {
                 if (verbose) {
                     System.out.println("Curating id: " + entry.getObjectId());
                 }
-                curator.clear();
-                for (String task : entry.getTaskNames()) {
-                    curator.addTask(task);
+                // does entry relate to a DSO or workflow object?
+                if (entry.getObjectId().indexOf("/") > 0) {
+                    curator.clear();
+                    for (String task : entry.getTaskNames()) {
+                        curator.addTask(task);
+                    }
+                    curator.curate(c, entry.getObjectId());
+                } else {
+                    // make eperson who queued task the effective user
+                    EPerson agent = EPerson.findByEmail(c, entry.getEpersonId());
+                    if (agent != null) {
+                        c.setCurrentUser(agent);
+                    }
+                    WorkflowCurator.curate(c, entry.getObjectId());
                 }
-                curator.curate(c, entry.getObjectId());
             }
             queue.release(taskQueueName, ticket, true);
         }
