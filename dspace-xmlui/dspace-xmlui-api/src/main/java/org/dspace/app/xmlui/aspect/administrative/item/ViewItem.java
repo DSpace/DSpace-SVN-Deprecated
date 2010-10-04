@@ -84,6 +84,8 @@ public class ViewItem extends AbstractDSpaceTransformer {
 
 	private static final Message T_option_view = message("xmlui.administrative.item.general.option_view");
 
+        private static final Message T_option_curate = message("xmlui.administrative.item.general.option_curate");
+
 	private static final Message T_title = message("xmlui.administrative.item.ViewItem.title");
 
 	private static final Message T_trail = message("xmlui.administrative.item.ViewItem.trail");
@@ -132,6 +134,7 @@ public class ViewItem extends AbstractDSpaceTransformer {
 		options.addItem().addXref(baseURL + "&submit_metadata",
 				T_option_metadata);
 		options.addItem().addHighlight("bold").addXref(tabLink, T_option_view);
+                options.addItem().addXref(baseURL + "&submit_curate", T_option_curate);
 
 		// item
 		

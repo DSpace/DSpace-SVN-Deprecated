@@ -44,7 +44,7 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -58,7 +58,6 @@ import org.dspace.authorize.AuthorizeException;
 import org.dspace.authorize.AuthorizeManager;
 import org.dspace.authorize.ResourcePolicy;
 import org.dspace.browse.BrowseException;
-import org.dspace.browse.IndexBrowse;
 import org.dspace.content.Collection;
 import org.dspace.content.Community;
 import org.dspace.harvest.HarvestedCollection;
@@ -66,11 +65,14 @@ import org.dspace.content.Item;
 import org.dspace.content.ItemIterator;
 import org.dspace.harvest.OAIHarvester;
 import org.dspace.harvest.OAIHarvester.HarvestScheduler;
-import org.dspace.harvest.OAIHarvester.HarvestingException;
 import org.dspace.content.crosswalk.CrosswalkException;
 import org.dspace.core.ConfigurationManager;
 import org.dspace.core.Constants;
 import org.dspace.core.Context;
+import org.dspace.core.PluginManager;
+import org.dspace.curate.Curator;
+import org.dspace.curate.TaskQueue;
+import org.dspace.curate.TaskQueueEntry;
 import org.dspace.eperson.Group;
 import org.jdom.JDOMException;
 import org.jdom.input.SAXBuilder;
@@ -419,7 +421,7 @@ public class FlowContainerUtils
 	
 	/**
 	 * Look up the id of a group authorized for one of the given roles. If no group is currently 
-	 * authorized to perform this role then a new group will be created and assigned the role.
+	 * authorized to preform this role then a new group will be created and assigned the role.
 	 * 
 	 * @param context The current DSpace context.
 	 * @param collectionID The collection id.
@@ -516,7 +518,7 @@ public class FlowContainerUtils
 			
 		}
 		
-		// Second, remove all authorizations for this role by searching for all policies that this 
+		// Second, remove all outhorizations for this role by searching for all policies that this 
 		// group has on the collection and remove them otherwise the delete will fail because 
 		// there are dependencies.
 		@SuppressWarnings("unchecked") // the cast is correct
@@ -541,10 +543,11 @@ public class FlowContainerUtils
 	
 	/**
 	 * Look up the id of a group authorized for one of the given roles. If no group is currently 
-	 * authorized to perform this role then a new group will be created and assigned the role.
+	 * authorized to preform this role then a new group will be created and assigned the role.
 	 * 
 	 * @param context The current DSpace context.
 	 * @param collectionID The collection id.
+	 * @param roleName ADMIN, WF_STEP1,	WF_STEP2, WF_STEP3,	SUBMIT, DEFAULT_READ.
 	 * @return The id of the group associated with that particular role.
 	 */
 	public static int getCollectionDefaultRead(Context context, int collectionID) throws SQLException, AuthorizeException
@@ -555,16 +558,16 @@ public class FlowContainerUtils
 		Group[] bitstreamGroups = AuthorizeManager.getAuthorizedGroups(context, collection, Constants.DEFAULT_BITSTREAM_READ);
 		
 		if (itemGroups.length != 1 && bitstreamGroups.length != 1)
-			// If there are more than one groups assigned either of these privileges then this role based method will not work.
-			// The user will need to go to the authorization section to manually straighten this out.
+			// If there are more than one groups assigned either of these privleges then this role based method will not work.
+			// The user will need to go to the authorization section to manualy straight this out.
 			return -1;
 		
 		Group itemGroup = itemGroups[0];
 		Group bitstreamGroup = bitstreamGroups[0];
 		
 		if (itemGroup.getID() != bitstreamGroup.getID())
-			// If the same group is not assigned both of these privileges then this role based method will not work. The user 
-			// will need to go to the authorization section to manually straighten this out.
+			// If the same group is not assigned both of these priveleges then this role based method will not work. The user 
+			// will need to go to the authorization section to manualy straighten this out.
 			return -1;
 		
 		
@@ -573,8 +576,8 @@ public class FlowContainerUtils
 	}
 	
 	/**
-	 * Change default privileges from the anonymous group to a new group that will be created and
-	 * appropriate privileges assigned. The id of this new group will be returned.
+	 * Change default privleges from the anonymous group to a new group that will be created and
+	 * approrpate privleges assigned. The id of this new group will be returned.
 	 * 
 	 * @param context The current DSpace context.
 	 * @param collectionID The collection id.
@@ -591,15 +594,15 @@ public class FlowContainerUtils
 		Group role = Group.create(context);
 		role.setName("COLLECTION_"+collection.getID() +"_DEFAULT_READ");
 		
-		// Remove existing privileges from the anonymous group.
+		// Remove existing privleges from the anynomous group.
 		AuthorizeManager.removePoliciesActionFilter(context, collection, Constants.DEFAULT_ITEM_READ);
 		AuthorizeManager.removePoliciesActionFilter(context, collection, Constants.DEFAULT_BITSTREAM_READ);
 		
-		// Grant our new role the default privileges.
+		// Grant our new role the default privleges.
 		AuthorizeManager.addPolicy(context, collection, Constants.DEFAULT_ITEM_READ,      role);
 		AuthorizeManager.addPolicy(context, collection, Constants.DEFAULT_BITSTREAM_READ, role);
 		
-		// Commit the changes
+		// Committ the changes
 		role.update();
 		context.commit();
 		
@@ -607,7 +610,7 @@ public class FlowContainerUtils
 	}
 	
 	/**
-	 * Change the default read privileges to the anonymous group.
+	 * Change the default read priveleges to the anonymous group.
 	 * 
 	 * If getCollectionDefaultRead() returns -1 or the anonymous group then nothing 
 	 * is done. 
@@ -631,7 +634,7 @@ public class FlowContainerUtils
 		Group role = Group.find(context, roleID);
 		Group anonymous = Group.find(context,0);
 		
-		// Delete the old role, this will remove the default privileges.
+		// Delete the old role, this will remove the default privleges.
 		role.delete();
 		
 		// Set anonymous as the default read group.
@@ -933,7 +936,7 @@ public class FlowContainerUtils
      * authorized to perform this role then a new group will be created and assigned the role.
      * 
      * @param context The current DSpace context.
-     * @param communityID The collection id.
+     * @param collectionID The collection id.
      * @param roleName ADMIN.
      * @return The id of the group associated with that particular role, or -1 if the role was not found.
      */
@@ -1028,6 +1031,144 @@ public class FlowContainerUtils
         result.setOutcome(true);
         return result;
     }
+
+        /**
+     * processCurateCollection
+     *
+     * Utility method to process curation tasks
+     * submitted via the DSpace GUI
+     *
+     * @param context
+     * @param dsoID
+     * @param request
+     *
+     */
+        public static FlowResult processCurateCollection(Context context, int dsoID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+		if (task != null && task.length() == 0)
+			task = null;
+		Curator curator = new Curator();
+                curator.addTask(task);
+                curator.setInvoked(Curator.Invoked.INTERACTIVE);
+                if (Collection.find(context, dsoID) != null)
+                {
+                    Collection collection = Collection.find(context, dsoID);
+                    curator.curate(collection);
+                }
+                result.setOutcome(true);
+		result.setMessage(new Message("default","The task, " + task + " was completed with the status: " +
+                        curator.getStatus(task) + "." + "\n" +  "Results: " + "\n" +
+                        ((curator.getResult(task) != null) ? curator.getResult(task) : "Nothing to do for this DSpace object.")));
+                result.setContinue(true);
+		return result;
+	}
+
+        /**
+     * queues curation tasks
+     */
+        public static FlowResult processQueueCollection(Context context, int dsoID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+                String handle = new String("");
+                Curator curator = new Curator();
+                String taskQueueName = ConfigurationManager.getProperty("curate", "ui.queuename");
+                boolean status = true;
+                if (Collection.find(context, dsoID) != null)
+                {
+                    Collection collection = Collection.find(context, dsoID);
+                    handle = collection.getHandle();
+                }
+		if (task != null && task.length() == 0)
+			task = null;
+                curator.addTask(task);
+                try {
+                    curator.queue(context, handle, taskQueueName);
+                } catch (IOException ioe) {
+                    status = false;
+                } finally {
+                    result.setOutcome(true);
+                    result.setMessage(new Message("default"," The task, " + task + ", has " +
+                              ((status) ? "been queued with id, " + handle + " in the " + taskQueueName +
+                              " queue.": "has not been queued with id, " + handle + ". An error occurred.")));
+                    result.setContinue(true);
+                    return result;
+                }
+	}
+
+    /**
+     * processCurateCommunity
+     *
+     * Utility method to process curation tasks
+     * submitted via the DSpace GUI
+     *
+     * @param context
+     * @param dsoID
+     * @param request
+     *
+     */
+        public static FlowResult processCurateCommunity(Context context, int dsoID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+		if (task != null && task.length() == 0)
+			task = null;
+		Curator curator = new Curator();
+                // curator.setReporter(reporterName);
+                curator.addTask(task);
+                curator.setInvoked(Curator.Invoked.INTERACTIVE);
+                if (Community.find(context, dsoID) != null)
+                {
+                    Community community = Community.find(context, dsoID);
+                    curator.curate(context, community.getHandle());
+                }
+                result.setOutcome(true);
+		result.setMessage(new Message("default","The task, " + task + " was completed with the status: " + 
+                        curator.getStatus(task) + "." + "\n" +  "Results: " + "\n" +
+                        ((curator.getResult(task) != null) ? curator.getResult(task) : "Nothing to do for this DSpace object.")));
+                result.setContinue(true);
+		return result;
+	}
+
+        /**
+     * queues curation tasks
+     */
+        public static FlowResult processQueueCommunity(Context context, int dsoID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+                String handle = new String("");
+                Curator curator = new Curator();
+                String taskQueueName = ConfigurationManager.getProperty("curate", "ui.queuename");
+                boolean status = true;
+                if (Community.find(context, dsoID) != null)
+                {
+                    Community community = Community.find(context, dsoID);
+                    handle = community.getHandle();
+                }
+		if (task != null && task.length() == 0)
+			task = null;
+                curator.addTask(task);
+                try {
+                    curator.queue(context, handle, taskQueueName);
+                } catch (IOException ioe) {
+                    status = false;
+                } finally {
+                    result.setOutcome(true);
+                    result.setMessage(new Message("default"," The task, " + task + ", has " +
+                              ((status) ? "been queued with id, " + handle + " in the " + taskQueueName +
+                              " queue.": "has not been queued with id, " + handle + ". An error occurred.")));
+                    result.setContinue(true);
+                    return result;
+                }
+	}
+	
 	
 	/**
 	 * Check whether this metadata value is a proper XML fragment. If the value is not 
@@ -1042,7 +1183,7 @@ public class FlowContainerUtils
 		// escape the ampersand correctly;
 		value = escapeXMLEntities(value);
 		
-		// Try and parse the XML into a mini-DOM
+		// Try and parse the XML into a mini-dom
     	String xml = "<?xml version='1.0' encoding='UTF-8'?><fragment>"+value+"</fragment>";
  	   
  	   	ByteArrayInputStream inputStream = null;
@@ -1066,7 +1207,7 @@ public class FlowContainerUtils
 		} 
 		catch (IOException ioe) 
 		{
-			// This shouldn't ever occur because we are parsing
+			// This shouldn't ever occure because we are parsing
 			// an in-memory string, but in case it does we'll just return
 			// it as a normal error.
 			return ioe.getMessage();
@@ -1074,7 +1215,8 @@ public class FlowContainerUtils
 
     	return null;
 	}
-	
+
+        
     /** 
      * Sanitize any XML that was inputed by the user, this will clean up
      * any unescaped characters so that they can be stored as proper XML.

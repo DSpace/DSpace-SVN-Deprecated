@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 
 import org.apache.cocoon.environment.Request;
@@ -53,14 +54,20 @@ import org.dspace.content.Bitstream;
 import org.dspace.content.BitstreamFormat;
 import org.dspace.content.Bundle;
 import org.dspace.content.Collection;
+import org.dspace.content.Community;
 import org.dspace.content.DSpaceObject;
 import org.dspace.content.FormatIdentifier;
 import org.dspace.content.Item;
 import org.dspace.content.MetadataField;
 import org.dspace.content.MetadataSchema;
 import org.dspace.content.authority.Choices;
+import org.dspace.core.ConfigurationManager;
 import org.dspace.core.Constants;
 import org.dspace.core.Context;
+import org.dspace.core.PluginManager;
+import org.dspace.curate.Curator;
+import org.dspace.curate.TaskQueue;
+import org.dspace.curate.TaskQueueEntry;
 import org.dspace.handle.HandleManager;
 
 /**
@@ -78,8 +85,8 @@ public class FlowItemUtils
 	private static final Message T_metadata_added = new Message("default","New metadata was added.");
 	private static final Message T_item_withdrawn = new Message("default","The item has been withdrawn.");
 	private static final Message T_item_reinstated = new Message("default","The item has been reinstated.");
-    private static final Message T_item_moved = new Message("default","The item has been moved.");
-    private static final Message T_item_move_destination_not_found = new Message("default","The selected destination collection could not be found.");
+        private static final Message T_item_moved = new Message("default","The item has been moved.");
+        private static final Message T_item_move_destination_not_found = new Message("default","The selected destination collection could not be found.");
 	private static final Message T_bitstream_added = new Message("default","The new bitstream was successfully uploaded.");
 	private static final Message T_bitstream_failed = new Message("default","Error while uploading file.");
 	private static final Message T_bitstream_updated = new Message("default","The bitstream has been updated.");
@@ -671,7 +678,76 @@ public class FlowItemUtils
 		
 		return result;
 	}
-	
+
+        /**
+     * processCurateDSO
+     *
+     * Utility method to process curation tasks
+     * submitted via the DSpace GUI
+     *
+     * @param context
+     * @param itemID
+     * @param request
+     *
+     */
+        public static FlowResult processCurateItem(Context context, int itemID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+		if (task != null && task.length() == 0)
+			task = null;
+		Curator curator = new Curator();
+                // curator.setReporter(reporterName);
+                curator.addTask(task);
+                curator.setInvoked(Curator.Invoked.INTERACTIVE);
+               if (Item.find(context, itemID) != null)
+                {
+                    Item item = Item.find(context, itemID);
+                    curator.curate(item);
+                }
+                result.setOutcome(true);
+		result.setMessage(new Message("default","The task, " + task +
+                        " was completed with the status: " + curator.getStatus(task) + 
+                        "." + "\n" + "Results: " +  "\n" +
+                        ((curator.getResult(task) != null) ? curator.getResult(task) : "Nothing to do for this DSpace object.")));
+                result.setContinue(true);
+		return result;
+	}
+
+        /**
+     * queues curation tasks
+     */
+        public static FlowResult processQueueItem(Context context, int itemID, Request request)
+                                                                throws AuthorizeException, IOException, SQLException, Exception
+	{
+                FlowResult result = new FlowResult();
+                String task = request.getParameter("curate_task");
+                String handle = new String("");
+                Curator curator = new Curator();
+                String taskQueueName = ConfigurationManager.getProperty("curate", "ui.queuename");
+                boolean status = true;
+                if (Item.find(context, itemID) != null)
+                {
+                    Item item = Item.find(context, itemID);
+                    handle = item.getHandle();
+                }
+		if (task != null && task.length() == 0)
+			task = null;
+                curator.addTask(task);
+                try {
+                    curator.queue(context, handle, taskQueueName);
+                } catch (IOException ioe) {
+                    status = false;
+                } finally {
+                    result.setOutcome(true);
+                    result.setMessage(new Message("default", " The task, " + task + ", has " +
+                              ((status) ? "been queued with id, " + handle + " in the " + taskQueueName + " queue.": "has not been queued with id, " + handle + ". An error occurred.")));
+                    result.setContinue(true);
+                    return result;
+                }
+	}
+
 	
 	/**
 	 * Parse the given name into three parts, divided by an _. Each part should represent the 

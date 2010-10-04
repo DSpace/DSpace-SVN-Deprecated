@@ -72,6 +72,7 @@ public class EditCollectionHarvestingForm extends AbstractDSpaceTransformer
 	private static final Message T_collection_trail = message("xmlui.administrative.collection.general.collection_trail");
 	private static final Message T_options_metadata = message("xmlui.administrative.collection.general.options_metadata");	
 	private static final Message T_options_roles = message("xmlui.administrative.collection.general.options_roles");
+        private static final Message T_options_curate = message("xmlui.administrative.collection.general.options_curate");
 	private static final Message T_main_head = message("xmlui.administrative.collection.EditCollectionMetadataForm.main_head");
 	
 	private static final Message T_options_harvest = message("xmlui.administrative.collection.GeneralCollectionHarvestingForm.options_harvest");
@@ -81,7 +82,7 @@ public class EditCollectionHarvestingForm extends AbstractDSpaceTransformer
 	private static final Message T_label_source = message("xmlui.administrative.collection.GeneralCollectionHarvestingForm.label_source");
 	private static final Message T_source_normal = message("xmlui.administrative.collection.GeneralCollectionHarvestingForm.source_normal");
 	private static final Message T_source_harvested = message("xmlui.administrative.collection.GeneralCollectionHarvestingForm.source_harvested");
-
+        
 	private static final Message T_submit_return = message("xmlui.general.return");
 	private static final Message T_submit_save = message("xmlui.administrative.collection.GeneralCollectionHarvestingForm.submit_save");
 		
@@ -142,6 +143,7 @@ public class EditCollectionHarvestingForm extends AbstractDSpaceTransformer
 	    options.addItem().addXref(baseURL+"&submit_metadata",T_options_metadata);
 	    options.addItem().addXref(baseURL+"&submit_roles",T_options_roles);
 	    options.addItem().addHighlight("bold").addXref(baseURL+"&submit_harvesting",T_options_harvest);
+            options.addItem().addXref(baseURL+"&submit_curate",T_options_curate);
 	    
 	    
 	    // The top-level, all-setting, countent source radio button
