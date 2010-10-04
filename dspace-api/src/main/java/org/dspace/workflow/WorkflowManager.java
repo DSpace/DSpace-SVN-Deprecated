@@ -378,7 +378,7 @@ public class WorkflowManager
         switch (taskstate)
         {
         case WFSTATE_SUBMIT:
-            doState(c, wi, WFSTATE_STEP1POOL, e);
+            archived = doState(c, wi, WFSTATE_STEP1POOL, e);
             
             break;
         case WFSTATE_STEP1:
@@ -388,7 +388,7 @@ public class WorkflowManager
             if (record) {
                 recordApproval(c, wi, e);
             }
-            doState(c, wi, WFSTATE_STEP2POOL, e);
+            archived = doState(c, wi, WFSTATE_STEP2POOL, e);
 
             break;
 
@@ -399,7 +399,7 @@ public class WorkflowManager
             if (record) {
                 recordApproval(c, wi, e);
             }
-            doState(c, wi, WFSTATE_STEP3POOL, e);
+            archived = doState(c, wi, WFSTATE_STEP3POOL, e);
 
             break;
 
