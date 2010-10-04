@@ -59,7 +59,12 @@ public class RequiredMetadata extends AbstractCurationTask {
             int count = 0;
             try {
                 StringBuilder sb = new StringBuilder();
-                sb.append("Item: ").append(item.getHandle());
+                String handle = item.getHandle();
+                if (handle == null) {
+                    // we are still in workflow - no handle assigned
+                    handle = "in workflow";
+                }
+                sb.append("Item: ").append(handle);
                 for (String req : getReqList(item.getOwningCollection().getHandle())) {
                     DCValue[] vals = item.getMetadata(req);
                     if (vals.length == 0) {

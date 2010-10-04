@@ -152,11 +152,11 @@ public class WorkflowCurator {
                         return false;
                     }
                 } else if (status == Curator.CURATE_SUCCESS) {
-                    if (task.powers.contains("advance")) {
-                        action = "advance";
+                    if (task.powers.contains("approve")) {
+                        action = "approve";
                     }
                     notifyContacts(c, wfi, task, "success", action, result);
-                    if ("advance".equals(action)) {
+                    if ("approve".equals(action)) {
                         // cease further task processing and advance submission
                         return true;
                     }
@@ -187,9 +187,12 @@ public class WorkflowCurator {
             if ("$flowgroup".equals(contact)) {
                 // special literal for current flowgoup
                 int step = state2step(wfi.getState());
-                Group wfGroup = wfi.getCollection().getWorkflowGroup(step);
-                if (wfGroup != null) {
-                    epList.addAll(Arrays.asList(Group.allMembers(c, wfGroup)));
+                // make sure this step exists
+                if (step < 4) {
+                    Group wfGroup = wfi.getCollection().getWorkflowGroup(step);
+                    if (wfGroup != null) {
+                        epList.addAll(Arrays.asList(Group.allMembers(c, wfGroup)));
+                    }
                 }
             } else if ("$colladmin".equals(contact)) {
                 Group adGroup = wfi.getCollection().getAdministrators();
