@@ -35,7 +35,7 @@
  <!-- task. In the example below, the vscan (virus scan) task has been given -->
  <!-- the power to 'reject': meaning that if the task fails - viz. a virus   -->
  <!-- is detected - the item will be rejected like a reviewer would reject   -->
- <!-- it. The other 'workflow' value is 'advance', which skips any further   -->
+ <!-- it. The other 'workflow' value is 'approve', which skips any further   -->
  <!-- tasks and advances the item. The 'notify' element allows you use       -->
  <!-- the workflow system of notifications (email) whenever a task is        -->
  <!-- performed and returns the designated status code (in the 'on'          -->
