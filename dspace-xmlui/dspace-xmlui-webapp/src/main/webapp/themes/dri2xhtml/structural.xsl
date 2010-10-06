@@ -144,7 +144,6 @@
                         user. The meta element is ignored since its contents are not processed directly, but
                         instead referenced from the different points in the document. -->
                     <xsl:apply-templates />
-
                     <!--
                         The footer div, dropping whatever extra information is needed on the page. It will
                         most likely be something similar in structure to the currently given example. -->
@@ -399,9 +398,10 @@
             
         </div>
     </xsl:template>
-    
-    
-    <!-- Like the header, the footer contains various miscellanious text, links, and image placeholders -->
+
+   
+
+<!-- Like the header, the footer contains various miscellanious text, links, and image placeholders -->
     <xsl:template name="buildFooter">
         <div id="ds-footer">
             <i18n:text>xmlui.dri2xhtml.structural.footer-promotional</i18n:text>
@@ -646,8 +646,9 @@
                                 &#160;
                         </xsl:otherwise>
                 </xsl:choose>
-        </div>
-        <xsl:apply-templates select="@pagination">
+
+</div>
+                <xsl:apply-templates select="@pagination">
             <xsl:with-param name="position">bottom</xsl:with-param>
         </xsl:apply-templates>
     </xsl:template>
@@ -2801,10 +2802,44 @@
     
     <!-- This does it for all the DRI elements. The only thing left to do is to handle Cocoon's i18n
         transformer tags that are used for text translation. The templates below simply push through
-        the i18n elements so that they can translated after the XSL step. -->
+        the i18n elements so that they can translated after the XSL step.
+        Modified 9/3/2010 to format prototype Curation task results. -->
     <xsl:template match="i18n:text">
-        <xsl:copy-of select="."/>
+        <xsl:param name="text" select="."/>
+       <xsl:choose>
+       <xsl:when test="contains($text, '&#xa;')">
+          <xsl:value-of select="substring-before($text, '&#xa;')"/>
+            <ul>
+                <xsl:attribute name="style">float:left; list-style-type:none; text-align:left;</xsl:attribute>
+                <xsl:call-template name="linebreak">
+                    <xsl:with-param name="text" select="substring-after($text,'&#xa;')"/>
+                </xsl:call-template>
+            </ul>
+       </xsl:when>
+       <xsl:otherwise>
+            <xsl:copy-of select="$text"/>
+       </xsl:otherwise>
+       </xsl:choose>
     </xsl:template>
+
+    <!-- Function to replace \n -->
+    <xsl:template name="linebreak">
+       <xsl:param name="text" select="."/>
+       <xsl:choose>
+       <xsl:when test="contains($text, '&#xa;')">
+          <li>
+          <xsl:value-of select="substring-before($text, '&#xa;')"/>
+          </li>
+          <xsl:call-template name="linebreak">
+              <xsl:with-param name="text" select="substring-after($text,'&#xa;')"/>
+          </xsl:call-template>
+       </xsl:when>
+       <xsl:otherwise>
+            <xsl:value-of select="$text"/>
+       </xsl:otherwise>
+       </xsl:choose>
+    </xsl:template>
+
     
     <xsl:template match="i18n:translate">
         <xsl:copy-of select="."/>
