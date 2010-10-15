@@ -74,10 +74,14 @@ public class Curator {
     public Curator addTask(String taskName) {
         CurationTask task = (CurationTask)PluginManager.getNamedPlugin(CurationTask.class, taskName);
         if (task != null) {
-            task.init(this, taskName);
-            trMap.put(taskName, new TaskRunner(task, taskName));
-            // performance order currently FIFO - to be revisited
-            perfList.add(taskName);
+            try {
+                task.init(this, taskName);
+                trMap.put(taskName, new TaskRunner(task, taskName));
+                // performance order currently FIFO - to be revisited
+                perfList.add(taskName);
+            } catch (IOException ioE) {
+               log.error("Task: '" + taskName + "' initialization failure: " + ioE.getMessage()); 
+            }
         } else {
             log.error("Task: '" + taskName + "' does not resolve");
         }

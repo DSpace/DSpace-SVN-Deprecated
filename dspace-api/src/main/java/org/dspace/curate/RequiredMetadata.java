@@ -38,11 +38,12 @@ public class RequiredMetadata extends AbstractCurationTask {
     // map of required fields
     private Map<String, List<String>> reqMap = new HashMap<String, List<String>>();
     
-    @Override public void init(Curator curator, String taskId) {
+    @Override public void init(Curator curator, String taskId) throws IOException {
         super.init(curator, taskId);
         try {
             reader = new DCInputsReader();
         } catch (DCInputsReaderException dcre) {
+            throw new IOException(dcre.getMessage());
         }
     }
 

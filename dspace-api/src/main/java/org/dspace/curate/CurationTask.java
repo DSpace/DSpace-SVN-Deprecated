@@ -28,8 +28,9 @@ public interface CurationTask {
      * 
      * @param curator the Curator controlling this task
      * @param taskId identifier task should use in invoking services
+     * @throws IOException
      */
-    public void init(Curator curator, String taskId);
+    public void init(Curator curator, String taskId) throws IOException;
 
     /**
      * Perform the curation task upon passed DSO

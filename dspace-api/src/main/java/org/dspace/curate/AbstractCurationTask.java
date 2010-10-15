@@ -31,7 +31,7 @@ public abstract class AbstractCurationTask implements CurationTask {
     protected String taskId = null;
 
     @Override
-    public void init(Curator curator, String taskId) {
+    public void init(Curator curator, String taskId) throws IOException {
         this.curator = curator;
         this.taskId = taskId;
     }
