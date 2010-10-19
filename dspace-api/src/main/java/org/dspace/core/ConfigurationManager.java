@@ -196,7 +196,7 @@ public class ConfigurationManager
                             String key = (String)pe.nextElement();
                             String ival = interpolate(key, modProps.getProperty(key), 1);
                             if (ival != null)
-                                modProps.setProperty(key, value);
+                                modProps.setProperty(key, ival);
                         }
                         moduleProps.put(module, modProps);
                         value = modProps.getProperty(property);

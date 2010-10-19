@@ -72,7 +72,7 @@ public class Curator {
      * @return this curator - to support concatenating invocation style
      */
     public Curator addTask(String taskName) {
-        CurationTask task = (CurationTask)PluginManager.getNamedPlugin(CurationTask.class, taskName);
+        CurationTask task = (CurationTask)PluginManager.getNamedPlugin("curate", CurationTask.class, taskName);
         if (task != null) {
             try {
                 task.init(this, taskName);
@@ -87,6 +87,16 @@ public class Curator {
         }
         return this;
     }
+    
+    /**
+     * Returns whether this curator has the specified task
+     * 
+     * @param taskName - logical name of the task
+     * @return true if task has been configured, else false
+     */
+     public boolean hasTask(String taskName) {
+         return perfList.contains(taskName);
+     }
     
     
     /**
@@ -189,7 +199,7 @@ public class Curator {
      */
     public void queue(Context c, String id, String queueId) throws IOException {
         if (taskQ == null) {
-            taskQ = (TaskQueue)PluginManager.getSinglePlugin(TaskQueue.class);
+            taskQ = (TaskQueue)PluginManager.getSinglePlugin("curate", TaskQueue.class);
         }
         taskQ.enqueue(queueId, new TaskQueueEntry(c.getCurrentUser().getName(),
                                     System.currentTimeMillis(), perfList, id));

@@ -137,6 +137,9 @@ public class CurationCli {
                 System.out.println("Adding task: " + taskName);
             }
             curator.addTask(taskName);
+            if (verbose && ! curator.hasTask(taskName)) {
+                System.out.println("Task: " + taskName + " not resolved");
+            }
         } else if (taskQueueName == null) {
             // load taskFile
             BufferedReader reader = new BufferedReader(new FileReader(taskFileName));
@@ -170,7 +173,7 @@ public class CurationCli {
             }
         } else {
             // process the task queue
-            TaskQueue queue = (TaskQueue)PluginManager.getSinglePlugin(TaskQueue.class);
+            TaskQueue queue = (TaskQueue)PluginManager.getSinglePlugin("curate", TaskQueue.class);
             // use current time as our reader 'ticket'
             long ticket = System.currentTimeMillis();
             Iterator<TaskQueueEntry> entryIter = queue.dequeue(taskQueueName, ticket).iterator();
